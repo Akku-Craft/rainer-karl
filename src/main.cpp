@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <Wire.h>
 #include <GyverINA.h>
+#include <U8g2lib.h>
 
 /*
    Warning!!! The INA226 shunt voltage measurement range is +/- 81.92 mV
@@ -19,14 +20,16 @@
 // INA226 ina(0.05f);             // Standard address and max current, but different shunt (0.05 Ohm)
 // INA226 ina(0.05f, 1.5f);       // Standard address, different shunt (0.05 Ohm), and max expected current (1.5 A)
 // INA226 ina(0.05f, 1.5f, 0x41); // Fully customizable variant with manual parameter specification
-INA226 ina;                       // Standard parameter set for Arduino module (0.1, 0.8, 0x40)
+INA226 ina(0.002f, 5.0f);       // Use 2 mOhm shunt resistor (R002) and expected max current 5 A
+U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE);
 
 void setup() {
   // Open serial port
   Serial.begin(9600);
 
-  // Initialize I2C bus for INA226
+  // Initialize I2C bus for INA226 and OLED
   Wire.begin();
+  u8g2.begin();
 
   Serial.print(F("INA226..."));
 
@@ -70,26 +73,43 @@ void setup() {
 }
 
 void loop() {
-  // Read voltage
+  float voltage = ina.getVoltage();
+  float current = ina.getCurrent();
+  float power = ina.getPower();
+
+  // Serial output
   Serial.print(F("Voltage: "));
-  Serial.print(ina.getVoltage(), 3);
+  Serial.print(voltage, 3);
   Serial.println(F(" V"));
-
-  // Read current
   Serial.print(F("Current: "));
-  Serial.print(ina.getCurrent(), 3);
+  Serial.print(current, 3);
   Serial.println(F(" A"));
-
-  // Read power
   Serial.print(F("Power: "));
-  Serial.print(ina.getPower(), 3);
+  Serial.print(power, 3);
   Serial.println(F(" W"));
-
-  // Read shunt voltage
-  Serial.print(F("Shunt voltage: "));
-  Serial.print(ina.getShuntVoltage(), 6);
-  Serial.println(F(" V"));
-
   Serial.println("");
+
+  // OLED display output
+  u8g2.clearBuffer();
+  u8g2.setFont(u8g2_font_ncenB12_tr);
+  char buf[16];
+
+  dtostrf(voltage, 6, 3, buf);
+  u8g2.drawStr(0, 14, "U:");
+  u8g2.drawStr(24, 14, buf);
+  u8g2.drawStr(88, 14, "V");
+
+  dtostrf(current, 6, 3, buf);
+  u8g2.drawStr(0, 30, "I:");
+  u8g2.drawStr(24, 30, buf);
+  u8g2.drawStr(88, 30, "A");
+
+  dtostrf(power, 6, 3, buf);
+  u8g2.drawStr(0, 46, "P:");
+  u8g2.drawStr(24, 46, buf);
+  u8g2.drawStr(88, 46, "W");
+
+  u8g2.sendBuffer();
+
   delay(1000);
 }
