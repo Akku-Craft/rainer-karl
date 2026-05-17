@@ -23,6 +23,12 @@
 INA226 ina(0.002f, 5.0f);       // Use 2 mOhm shunt resistor (R002) and expected max current 5 A
 U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE);
 
+// Energy measurement variables
+unsigned long lastLoopTime = 0;
+float totalEnergy = 0.0f;        // Energy in Wh
+bool isMeasuring = false;
+const float VOLTAGE_THRESHOLD = 3.0f;
+
 void setup() {
   // Open serial port
   Serial.begin(9600);
@@ -73,9 +79,28 @@ void setup() {
 }
 
 void loop() {
+  unsigned long currentTime = millis();
   float voltage = ina.getVoltage();
   float current = ina.getCurrent();
   float power = ina.getPower();
+
+  // Energy measurement logic
+  if (voltage > VOLTAGE_THRESHOLD) {
+    if (!isMeasuring) {
+      isMeasuring = true;
+      lastLoopTime = currentTime;
+    } else {
+      // Calculate energy for this interval (Power * time in hours)
+      unsigned long timeDelta = currentTime - lastLoopTime;
+      float timeHours = timeDelta / 3600000.0f;  // Convert milliseconds to hours
+      totalEnergy += power * timeHours;  // Energy in Wh
+      lastLoopTime = currentTime;
+    }
+  } else {
+    if (isMeasuring) {
+      isMeasuring = false;  // Stop measuring when voltage drops below threshold
+    }
+  }
 
   // Serial output
   Serial.print(F("Voltage: "));
@@ -87,6 +112,9 @@ void loop() {
   Serial.print(F("Power: "));
   Serial.print(power, 3);
   Serial.println(F(" W"));
+  Serial.print(F("Energy: "));
+  Serial.print(totalEnergy, 3);  // In Wh
+  Serial.println(F(" Wh"));
   Serial.println("");
 
   // OLED display output
@@ -108,6 +136,11 @@ void loop() {
   u8g2.drawStr(0, 46, "P:");
   u8g2.drawStr(24, 46, buf);
   u8g2.drawStr(88, 46, "W");
+
+  dtostrf(totalEnergy, 6, 3, buf);  // In Wh
+  u8g2.drawStr(0, 62, "E:");
+  u8g2.drawStr(24, 62, buf);
+  u8g2.drawStr(88, 62, "Wh");
 
   u8g2.sendBuffer();
 
